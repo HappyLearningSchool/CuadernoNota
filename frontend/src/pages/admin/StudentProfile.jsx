@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { enrollStudent, getAdminStudent, getSections } from '../../api/admin.api';
+import { annulStudentEnrollment, enrollStudent, getAdminStudent, getSections } from '../../api/admin.api';
 import useToast from '../../hooks/useToast';
 import { getErrorMessage } from '../../utils/apiError';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SideDrawer from '../../components/ui/SideDrawer';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import StudentActions from '../../components/admin/StudentActions';
 import FormField, { inputClass, selectClass } from '../../components/ui/FormField';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
@@ -50,6 +51,9 @@ export default function StudentProfile() {
   const [enrollForm, setEnrollForm] = useState({ section_id: '', enrolled_at: '' });
   const [enrollError, setEnrollError] = useState('');
   const [activeTab, setActiveTab] = useState('summary');
+  const [annulTarget, setAnnulTarget] = useState(null);
+  const [annulReason, setAnnulReason] = useState('');
+  const [annulError, setAnnulError] = useState('');
 
   const { data: student, isLoading } = useQuery({ queryKey: ['admin-student', id], queryFn: () => getAdminStudent(id) });
   const { data: sections } = useQuery({ queryKey: ['admin-sections'], queryFn: () => getSections() });
@@ -63,6 +67,16 @@ export default function StudentProfile() {
       showToast('Inscripción registrada correctamente.');
     },
     onError: (err) => setEnrollError(getErrorMessage(err)),
+  });
+
+  const annulMutation = useMutation({
+    mutationFn: () => annulStudentEnrollment(id, annulTarget.id, annulReason.trim()),
+    onSuccess: async (result) => {
+      await qc.invalidateQueries();
+      setAnnulTarget(null);
+      showToast(result.message);
+    },
+    onError: (err) => setAnnulError(getErrorMessage(err)),
   });
 
   if (isLoading) return <LoadingSkeleton />;
@@ -185,6 +199,11 @@ export default function StudentProfile() {
                         Desde {formatDate(enrollment.enrolled_at)} {enrollment.ended_at ? `hasta ${formatDate(enrollment.ended_at)}` : '— actual'}
                       </p>
                       {enrollment.end_reason && <p className="mt-1 text-xs text-slate-400">Motivo: {enrollment.end_reason}</p>}
+                      <button type="button" className="mt-3 text-xs font-bold text-red-700 hover:underline" onClick={() => {
+                        setAnnulReason('');
+                        setAnnulError('');
+                        setAnnulTarget(enrollment);
+                      }}>Anular matrícula</button>
                     </div>
                   </li>
                 );
@@ -192,6 +211,23 @@ export default function StudentProfile() {
             </ol></div>)}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={annulTarget !== null}
+        onClose={() => { if (!annulMutation.isPending) setAnnulTarget(null); }}
+        onConfirm={() => { setAnnulError(''); annulMutation.mutate(); }}
+        loading={annulMutation.isPending}
+        disableConfirm={!annulReason.trim()}
+        title="Anular matrícula"
+        message={`Se quitará la matrícula de ${student.name} ${student.last_name} en ${annulTarget?.section?.grade?.name ?? ''} ${annulTarget?.section?.name ?? ''}. El motivo quedará registrado en auditoría.`}
+        confirmLabel="Anular matrícula"
+        tone="danger"
+      >
+        {annulError && <p role="alert" className="mb-4 text-sm text-red-700">{annulError}</p>}
+        <FormField htmlFor="annul-enrollment-reason" label="Motivo de la anulación" required>
+          <textarea id="annul-enrollment-reason" rows={3} maxLength={200} className={inputClass} value={annulReason} disabled={annulMutation.isPending} onChange={(event) => setAnnulReason(event.target.value)} />
+        </FormField>
+      </ConfirmDialog>
 
       <SideDrawer
         open={enrollOpen}

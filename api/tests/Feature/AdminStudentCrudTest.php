@@ -14,6 +14,27 @@ class AdminStudentCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_can_annul_a_duplicate_students_enrollment_then_delete_the_student(): void
+    {
+        $this->admin();
+        [, $section] = $this->catalog();
+        $student = $this->student(['active' => false]);
+        $enrollment = $student->enrollments()->create([
+            'section_id' => $section, 'enrolled_at' => '2026-01-01', 'status' => 'withdrawn',
+        ]);
+        $url = "/api/admin/students/{$student->id}/enrollments/{$enrollment->id}/annul";
+
+        $this->postJson($url)->assertJsonValidationErrors('reason');
+        $this->postJson($url, ['reason' => 'Expediente duplicado'])->assertOk();
+        $this->assertDatabaseMissing('student_enrollments', ['id' => $enrollment->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'student_enrollment_annul', 'record_id' => $enrollment->id,
+        ]);
+        $this->deleteJson("/api/admin/students/{$student->id}", [
+            'confirmation' => $student->enrollment_no,
+        ])->assertOk();
+    }
+
     public function test_admin_can_bulk_delete_students_without_history(): void
     {
         $this->admin();

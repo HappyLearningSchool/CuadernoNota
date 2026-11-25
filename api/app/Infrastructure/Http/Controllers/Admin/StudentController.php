@@ -217,6 +217,13 @@ class StudentController extends Controller
         return match (true) {
             $student->section_id !== null => 'una sección asignada',
             $student->enrollments()->exists() => 'una matrícula registrada (actual o anterior)',
+            default => $this->academicRecordBlocker($student),
+        };
+    }
+
+    private function academicRecordBlocker(Student $student): ?string
+    {
+        return match (true) {
             $student->activityScores()->exists() => 'una calificación de actividad',
             $student->periodGrades()->exists() => 'una calificación de período',
             $student->finalGrades()->exists() => 'una calificación final',
@@ -226,6 +233,40 @@ class StudentController extends Controller
             DB::table('promotion_decisions')->where('student_id', $student->id)->exists() => 'una decisión de promoción',
             default => null,
         };
+    }
+
+    public function annulEnrollment(Request $request, Student $student, int $enrollment): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:200']]);
+
+        DB::transaction(function () use ($request, $student, $enrollment, $data) {
+            $student = Student::query()->lockForUpdate()->findOrFail($student->id);
+            $record = $student->enrollments()->lockForUpdate()->findOrFail($enrollment);
+            $blocker = $this->academicRecordBlocker($student);
+
+            if ($blocker !== null) {
+                throw ValidationException::withMessages([
+                    'student' => "No se puede anular la matrícula porque el expediente tiene {$blocker}.",
+                ]);
+            }
+
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'student_enrollment_annul',
+                'affected_table' => 'student_enrollments',
+                'record_id' => $record->id,
+                'detail' => ['reason' => $data['reason'], 'enrollment' => $record->getAttributes()],
+                'ip' => $request->ip(),
+            ]);
+
+            $record->delete();
+            if ($student->section_id !== null && (int) $student->section_id === (int) $record->section_id
+                && ! $student->enrollments()->where('status', 'active')->exists()) {
+                $student->update(['section_id' => null, 'academic_year_id' => null]);
+            }
+        });
+
+        return response()->json(['message' => 'Matrícula anulada.']);
     }
 
     public function bulkDestroy(Request $request): JsonResponse

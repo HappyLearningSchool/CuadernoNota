@@ -20,6 +20,7 @@ export const getAdminStudent = id => api.get(`/admin/students/${id}`).then(r => 
 export const createAdminStudent = data => api.post('/admin/students', data).then(r => r.data);
 export const updateAdminStudent = (id, data) => api.patch(`/admin/students/${id}`, data).then(r => r.data);
 export const deleteAdminStudent = (id, confirmation) => api.delete(`/admin/students/${id}`, { data: { confirmation } }).then(r => r.data);
+export const annulStudentEnrollment = (id, enrollmentId, reason) => api.post(`/admin/students/${id}/enrollments/${enrollmentId}/annul`, { reason }).then(r => r.data);
 export const enrollStudent = (id, data) => api.post(`/admin/students/${id}/enrollments`, data).then(r => r.data);
 export const deactivateStudent = (id, data) => api.post(`/admin/students/${id}/deactivate`, data).then(r => r.data);
 export const reactivateStudent = id => api.post(`/admin/students/${id}/reactivate`).then(r => r.data);
