@@ -198,11 +198,11 @@ class StudentController extends Controller
             }
 
             // Never cascade-delete an academic record, including historical enrollments.
-            $hasHistory = $this->hasAcademicHistory($student);
+            $blockingRecord = $this->academicDeletionBlocker($student);
 
-            if ($hasHistory) {
+            if ($blockingRecord !== null) {
                 throw ValidationException::withMessages([
-                    'student' => 'No se puede eliminar este estudiante porque tiene una sección asignada o historial académico. Puedes desactivarlo para conservar sus matrículas, calificaciones y demás registros.',
+                    'student' => "No se puede eliminar este estudiante porque su expediente tiene {$blockingRecord}.",
                 ]);
             }
 
@@ -212,18 +212,20 @@ class StudentController extends Controller
         return response()->json(['message' => 'Estudiante eliminado definitivamente.']);
     }
 
-    private function hasAcademicHistory(Student $student): bool
+    private function academicDeletionBlocker(Student $student): ?string
     {
-        return $student->section_id !== null
-                || $student->enrollments()->exists()
-                || $student->activityScores()->exists()
-                || $student->periodGrades()->exists()
-                || $student->finalGrades()->exists()
-                || $student->attendances()->exists()
-                || $student->observations()->exists()
-                || $student->alerts()->exists()
-                || DB::table('promotion_decisions')->where('student_id', $student->id)->exists();
-
+        return match (true) {
+            $student->section_id !== null => 'una sección asignada',
+            $student->enrollments()->exists() => 'una matrícula registrada (actual o anterior)',
+            $student->activityScores()->exists() => 'una calificación de actividad',
+            $student->periodGrades()->exists() => 'una calificación de período',
+            $student->finalGrades()->exists() => 'una calificación final',
+            $student->attendances()->exists() => 'un registro de asistencia',
+            $student->observations()->exists() => 'una observación',
+            $student->alerts()->exists() => 'una alerta',
+            DB::table('promotion_decisions')->where('student_id', $student->id)->exists() => 'una decisión de promoción',
+            default => null,
+        };
     }
 
     public function bulkDestroy(Request $request): JsonResponse
@@ -238,7 +240,7 @@ class StudentController extends Controller
             if ($students->count() !== count($data['student_ids'])) {
                 throw ValidationException::withMessages(['student_ids' => 'El listado cambió. Actualízalo antes de continuar.']);
             }
-            $blocked = $students->filter(fn ($student) => $this->hasAcademicHistory($student));
+            $blocked = $students->filter(fn (Student $student) => $this->academicDeletionBlocker($student) !== null);
             if ($blocked->isNotEmpty()) {
                 throw ValidationException::withMessages(['student_ids' => 'No se eliminó ningún estudiante. Tienen sección o historial académico: '.$blocked->pluck('enrollment_no')->implode(', ').'. Desmárcalos para continuar.']);
             }
