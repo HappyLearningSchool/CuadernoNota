@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bulkAnnulEnrollments, bulkWithdrawStudents, getAdminStudents, getStudentWorkspaces } from '../../api/admin.api';
@@ -26,9 +26,10 @@ export default function StudentWorkspace() {
   const { toast, showToast } = useToast();
   const [search, setSearch] = useState('');
   const [active, setActive] = useState('');
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const selectedIds = selectedStudents.map((student) => Number(student.id));
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [withdrawIds, setWithdrawIds] = useState([]);
+  const [withdrawStudents, setWithdrawStudents] = useState([]);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [annulStudents, setAnnulStudents] = useState([]);
   const [annulReason, setAnnulReason] = useState('');
@@ -36,7 +37,7 @@ export default function StudentWorkspace() {
     mutationFn: bulkAnnulEnrollments,
     onSuccess: (result) => {
       setAnnulStudents([]);
-      setSelectedIds([]);
+      setSelectedStudents([]);
       qc.invalidateQueries({ queryKey: ['admin-student'] });
       qc.invalidateQueries({ queryKey: ['admin-student-placements'] });
       showToast(result.message);
@@ -45,8 +46,8 @@ export default function StudentWorkspace() {
   const withdraw = useMutation({
     mutationFn: bulkWithdrawStudents,
     onSuccess: (result) => {
-      setWithdrawIds([]);
-      setSelectedIds([]);
+      setWithdrawStudents([]);
+      setSelectedStudents([]);
       qc.invalidateQueries({ predicate: (query) => [
         'admin-students', 'admin-student', 'admin-student-placements', 'admin-dashboard',
         'admin-sections', 'admin-promotion-candidates', 'admin-student-workspaces', 'courses', 'attendance',
@@ -56,8 +57,9 @@ export default function StudentWorkspace() {
   });
 
   useEffect(() => {
-    setSelectedIds([]);
-    setWithdrawIds([]);
+    setSelectedStudents([]);
+    setBulkOpen(false);
+    setWithdrawStudents([]);
     setAnnulStudents([]);
     annul.reset();
   }, [workspaceId, yearId]);
@@ -82,16 +84,8 @@ export default function StudentWorkspace() {
   });
   const students = data?.data || [];
 
-  useEffect(() => {
-    const visibleIds = new Set(students.map((student) => Number(student.id)));
-    setSelectedIds((current) => current.filter((id) => visibleIds.has(id)));
-  }, [data]);
-
-  const selectedStudents = useMemo(
-    () => students.filter((student) => selectedIds.includes(Number(student.id))),
-    [students, selectedIds],
-  );
-  const allVisibleSelected = students.length > 0 && students.every((student) => selectedIds.includes(Number(student.id)));
+  const visibleSelectedCount = students.filter((student) => selectedIds.includes(Number(student.id))).length;
+  const allVisibleSelected = students.length > 0 && visibleSelectedCount === students.length;
   const title = pending
     ? 'Pendientes de asignación'
     : workspace ? `${workspace.grade_name} · Sección ${workspace.section_name}` : 'Workspace del curso';
@@ -101,8 +95,12 @@ export default function StudentWorkspace() {
   const totals = pending ? workspaceData?.pending : workspace;
   const workspaceLabel = pending ? 'Pendientes de asignación' : title;
 
-  const toggleAll = () => {
-    setSelectedIds(allVisibleSelected ? [] : students.map((student) => Number(student.id)));
+  const updateSelection = (rows, checked) => {
+    const ids = new Set(rows.map((student) => Number(student.id)));
+    setSelectedStudents((current) => {
+      const remaining = current.filter((student) => !ids.has(Number(student.id)));
+      return checked ? [...remaining, ...rows] : remaining;
+    });
   };
 
   return <>
@@ -131,14 +129,14 @@ export default function StudentWorkspace() {
       </select>
     </FilterBar>
 
-    {students.length > 0 && <div className="sticky top-0 z-20 mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    {(students.length > 0 || selectedIds.length > 0) && <div className="sticky top-0 z-20 mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-sm font-extrabold text-slate-900">Acciones por lote</p>
-        <p className="mt-1 text-xs text-slate-500">{selectedIds.length} de {students.length} estudiantes visibles seleccionados.</p>
+        <p className="mt-1 text-xs text-slate-500">{selectedIds.length} seleccionados en total · {visibleSelectedCount} visibles.</p>
         {!pending && selectedIds.length > 0 && <p className="mt-1 text-xs font-bold text-indigo-600">Usa «Quitar seleccionados del curso» para retirar todo el grupo marcado.</p>}
       </div>
       <div className="flex flex-wrap gap-2">
-        <StudentBulkDelete students={selectedStudents} onDeleted={(result) => { setSelectedIds([]); showToast(result.message); }} />
+        <StudentBulkDelete students={selectedStudents} onDeleted={(result) => { setSelectedStudents([]); showToast(result.message); }} />
         {pending && <button type="button" disabled={!selectedStudents.length} onClick={() => {
           annul.reset();
           setAnnulReason('');
@@ -146,10 +144,11 @@ export default function StudentWorkspace() {
         }} className="rounded-lg border border-red-200 px-3 py-2.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-40">
           Anular matrículas
         </button>}
-        {!pending && <button type="button" disabled={!selectedIds.length} onClick={() => { withdraw.reset(); setWithdrawReason(''); setWithdrawIds([...selectedIds]); }} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
+        {!pending && <button type="button" disabled={!selectedIds.length} onClick={() => { withdraw.reset(); setWithdrawReason(''); setWithdrawStudents(selectedStudents); }} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
           <span aria-hidden="true" className="material-symbols-outlined text-[17px]">group_remove</span> Quitar seleccionados del curso ({selectedIds.length})
         </button>}
-        <button type="button" onClick={toggleAll} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">{allVisibleSelected ? 'Limpiar selección' : 'Seleccionar visibles'}</button>
+        <button type="button" disabled={!students.length} onClick={() => updateSelection(students, !allVisibleSelected)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40">{allVisibleSelected ? 'Desmarcar visibles' : 'Seleccionar visibles'}</button>
+        {selectedIds.length > 0 && <button type="button" onClick={() => setSelectedStudents([])} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpiar selección</button>}
         <button type="button" disabled={!selectedIds.length} onClick={() => setBulkOpen(true)} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
           <span aria-hidden="true" className="material-symbols-outlined text-[17px]">find_replace</span> Buscar y reemplazar matrículas
         </button>
@@ -163,12 +162,12 @@ export default function StudentWorkspace() {
       emptyIcon="groups"
       emptyTitle="No hay estudiantes que coincidan con los filtros de este workspace."
       columns={[
-        { key: 'select', label: '', align: 'center', render: (student) => <input aria-label={`Seleccionar a ${student.name} ${student.last_name}`} type="checkbox" checked={selectedIds.includes(Number(student.id))} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, Number(student.id)] : current.filter((id) => id !== Number(student.id)))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" /> },
+        { key: 'select', label: '', align: 'center', render: (student) => <input aria-label={`Seleccionar a ${student.name} ${student.last_name}`} type="checkbox" checked={selectedIds.includes(Number(student.id))} onClick={(event) => event.stopPropagation()} onChange={(event) => updateSelection([student], event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600" /> },
         { key: 'enrollment_no', label: 'Matrícula', render: (student) => <span className="font-mono text-xs font-bold text-slate-500">{student.enrollment_no}</span> },
         { key: 'student', label: 'Estudiante', render: (student) => <div><p className="font-extrabold text-slate-900">{student.name} {student.last_name}</p><p className="mt-1 text-xs text-slate-500">{student.section ? `${student.section.grade?.name} · Sección ${student.section.name}` : 'Sin sección actual'}</p></div> },
         { key: 'year', label: 'Año escolar', render: (student) => student.section?.academic_year?.name || '—' },
         { key: 'active', label: 'Estado', align: 'center', render: (student) => <StatusBadge tone={!student.active ? 'neutral' : student.section ? 'success' : 'warning'} label={!student.active ? 'Inactivo' : student.section ? 'Inscrito' : 'Pendiente'} /> },
-        { key: 'actions', label: 'Acciones', align: 'right', render: (student) => <StudentActions student={student} hideWithdraw={selectedIds.length > 0} onSuccess={showToast} /> },
+        { key: 'actions', label: 'Acciones', align: 'right', render: (student) => <StudentActions student={student} hideWithdraw={selectedIds.length > 0} onDeleted={() => updateSelection([student], false)} onSuccess={showToast} /> },
       ]}
     />
 
@@ -181,15 +180,18 @@ export default function StudentWorkspace() {
         qc.invalidateQueries({ queryKey: ['admin-students'] });
         qc.invalidateQueries({ queryKey: ['admin-student-workspaces'] });
         setBulkOpen(false);
-        setSelectedIds([]);
+        setSelectedStudents([]);
         showToast(result.message);
       }}
     />
-    <ConfirmDialog open={withdrawIds.length > 0} onClose={() => { if (!withdraw.isPending) setWithdrawIds([]); }}
-      title={`Quitar ${withdrawIds.length} estudiantes del curso`}
+    <ConfirmDialog open={withdrawStudents.length > 0} onClose={() => { if (!withdraw.isPending) setWithdrawStudents([]); }}
+      title={`Quitar ${withdrawStudents.length} estudiantes del curso`}
       message={`Se retirarán de ${title}. Sus notas, asistencia e historial se conservarán. Los estudiantes activos quedarán pendientes de asignación.`}
       confirmLabel="Quitar seleccionados" loading={withdraw.isPending} disableConfirm={!withdrawReason.trim()}
-      onConfirm={() => withdraw.mutate({ student_ids: withdrawIds, section_id: Number(workspaceId), reason: withdrawReason.trim() })}>
+      onConfirm={() => withdraw.mutate({ student_ids: withdrawStudents.map((student) => Number(student.id)), section_id: Number(workspaceId), reason: withdrawReason.trim() })}>
+      <ul className="mb-3 max-h-32 overflow-y-auto text-xs text-slate-600">
+        {withdrawStudents.map((student) => <li key={student.id}>{student.enrollment_no} · {student.name} {student.last_name}</li>)}
+      </ul>
       {withdraw.isError && <p role="alert" className="mb-3 text-sm text-red-600">{getErrorMessage(withdraw.error)}</p>}
       <FormField htmlFor="bulk-withdraw-reason" label="Motivo del retiro" required>
         <textarea id="bulk-withdraw-reason" autoFocus rows={3} maxLength={200} disabled={withdraw.isPending} className={inputClass} value={withdrawReason} onChange={(event) => setWithdrawReason(event.target.value)} />
