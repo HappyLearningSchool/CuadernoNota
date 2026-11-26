@@ -163,8 +163,28 @@ export default function StudentProfile() {
           </div>}
 
           {activeTab === 'grades' && <div className="space-y-6">
+            {(student.activity_scores || []).length > 0 && <section>
+              <SectionTitle title="Calificaciones de actividades" description="Notas guardadas en actividades, aunque todavía no estén reflejadas en una calificación por período." />
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-600"><tr>
+                    <th className="p-3">Actividad</th><th className="p-3">Materia</th><th className="p-3">Período</th>
+                    <th className="p-3">Competencia</th><th className="p-3">Nota</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {student.activity_scores.map((grade) => <tr key={grade.id}>
+                      <td className="p-3 font-bold">{grade.activity || '—'}</td>
+                      <td className="p-3">{grade.subject || '—'}</td>
+                      <td className="p-3">{[grade.period, grade.academic_year].filter(Boolean).join(' · ') || '—'}</td>
+                      <td className="p-3">{grade.competency || '—'}</td>
+                      <td className="p-3">{score(grade.score)}</td>
+                    </tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </section>}
             <SectionTitle title="Calificaciones por período" description="Competencias, promedio del período y estado de revisión." />
-            {(student.period_grades || []).length === 0 ? <EmptyState icon="grade" title="Aún no hay calificaciones registradas" /> : <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase text-slate-500"><tr><th className="px-4 py-3">Materia</th><th className="px-4 py-3">Período</th><th className="px-4 py-3 text-center">C1</th><th className="px-4 py-3 text-center">C2</th><th className="px-4 py-3 text-center">C3</th><th className="px-4 py-3 text-center">C4</th><th className="px-4 py-3 text-center">Promedio</th><th className="px-4 py-3">Estado</th></tr></thead><tbody className="divide-y divide-slate-100">{student.period_grades.map((grade) => <tr key={grade.id}><td className="px-4 py-3 font-bold text-slate-900">{grade.subject?.name}</td><td className="px-4 py-3 text-slate-600">{grade.period?.name} · {grade.period?.academic_year?.name}</td><td className="px-4 py-3 text-center">{score(grade.c1_score)}</td><td className="px-4 py-3 text-center">{score(grade.c2_score)}</td><td className="px-4 py-3 text-center">{score(grade.c3_score)}</td><td className="px-4 py-3 text-center">{score(grade.c4_score)}</td><td className="px-4 py-3 text-center font-extrabold">{score(grade.period_score)}</td><td className="px-4 py-3"><StatusBadge tone={grade.status === 'official' ? 'success' : grade.status === 'in_review' ? 'warning' : 'neutral'} label={grade.status === 'official' ? 'Oficial' : grade.status === 'in_review' ? 'En revisión' : 'Borrador'} /></td></tr>)}</tbody></table></div>}
+            {(student.period_grades || []).length === 0 ? <EmptyState icon="grade" title="Aún no hay calificaciones por período" /> : <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase text-slate-500"><tr><th className="px-4 py-3">Materia</th><th className="px-4 py-3">Período</th><th className="px-4 py-3 text-center">C1</th><th className="px-4 py-3 text-center">C2</th><th className="px-4 py-3 text-center">C3</th><th className="px-4 py-3 text-center">C4</th><th className="px-4 py-3 text-center">Promedio</th><th className="px-4 py-3">Estado</th></tr></thead><tbody className="divide-y divide-slate-100">{student.period_grades.map((grade) => <tr key={grade.id}><td className="px-4 py-3 font-bold text-slate-900">{grade.subject?.name}</td><td className="px-4 py-3 text-slate-600">{grade.period?.name} · {grade.period?.academic_year?.name}</td><td className="px-4 py-3 text-center">{score(grade.c1_score)}</td><td className="px-4 py-3 text-center">{score(grade.c2_score)}</td><td className="px-4 py-3 text-center">{score(grade.c3_score)}</td><td className="px-4 py-3 text-center">{score(grade.c4_score)}</td><td className="px-4 py-3 text-center font-extrabold">{score(grade.period_score)}</td><td className="px-4 py-3"><StatusBadge tone={grade.status === 'official' ? 'success' : grade.status === 'in_review' ? 'warning' : 'neutral'} label={grade.status === 'official' ? 'Oficial' : grade.status === 'in_review' ? 'En revisión' : 'Borrador'} /></td></tr>)}</tbody></table></div>}
             {(student.final_grades || []).length > 0 && <><SectionTitle title="Calificaciones finales" description="Resultado final por materia y año escolar." /><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{student.final_grades.map((grade) => <div key={grade.id} className="rounded-xl border border-slate-200 p-4"><p className="font-extrabold text-slate-900">{grade.subject?.name}</p><p className="mt-1 text-xs text-slate-500">{grade.academic_year?.name}</p><p className="mt-3 text-2xl font-extrabold text-indigo-600">{score(grade.cf)}</p></div>)}</div></>}
           </div>}
 

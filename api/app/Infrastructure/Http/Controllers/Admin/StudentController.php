@@ -128,6 +128,22 @@ class StudentController extends Controller
             'observations' => $student->observations->count(),
         ]);
 
+        $student->setAttribute('activity_scores', $student->activityScores()
+            ->with(['activity:id,name,activity_template_id', 'activity.template:id,name',
+                'subject:id,name', 'period:id,name,academic_year_id', 'period.academicYear:id,name', 'competency:id,code'])
+            ->orderByDesc('period_id')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($grade) => [
+                'id' => $grade->id,
+                'activity' => $grade->activity?->name,
+                'subject' => $grade->subject?->name,
+                'period' => $grade->period?->name,
+                'academic_year' => $grade->period?->academicYear?->name,
+                'competency' => $grade->competency?->code,
+                'score' => $grade->score,
+            ]));
+
         return response()->json($student);
     }
 

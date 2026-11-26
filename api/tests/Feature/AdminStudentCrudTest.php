@@ -14,6 +14,22 @@ class AdminStudentCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_student_profile_shows_activity_scores_without_period_grades(): void
+    {
+        $this->admin();
+        [, $section, $subject, $period] = $this->catalog();
+        $student = $this->student();
+        DB::table('activity_scores')->insert([
+            'student_id' => $student->id, ...$this->activityScore($section, $subject, $period),
+        ]);
+
+        $this->getJson("/api/admin/students/{$student->id}")->assertOk()
+            ->assertJsonCount(0, 'period_grades')
+            ->assertJsonPath('activity_scores.0.activity', 'Tarea')
+            ->assertJsonPath('activity_scores.0.subject', 'Lengua')
+            ->assertJsonPath('activity_scores.0.score', 85);
+    }
+
     public function test_bulk_annulment_processes_eligible_students_and_skips_multiple_or_missing_enrollments(): void
     {
         $this->admin();
