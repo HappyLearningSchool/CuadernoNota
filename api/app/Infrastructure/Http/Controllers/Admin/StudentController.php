@@ -268,32 +268,39 @@ class StudentController extends Controller
             'reason' => ['required', 'string', 'max:200'],
         ]);
 
-        DB::transaction(function () use ($request, $data) {
+        $result = DB::transaction(function () use ($request, $data) {
             $students = Student::whereIn('id', $data['student_ids'])->orderBy('id')->lockForUpdate()->get();
             if ($students->count() !== count($data['student_ids'])) {
                 throw ValidationException::withMessages(['student_ids' => 'El listado cambió. Actualízalo antes de continuar.']);
             }
 
+            $annulled = 0;
+            $skipped = [];
             foreach ($students as $student) {
                 $records = $student->enrollments()->lockForUpdate()->limit(2)->get();
                 $blocker = match (true) {
                     $student->section_id !== null => 'una sección actual',
-                    $records->isEmpty() => 'ninguna matrícula para anular',
+                    $records->isEmpty() => 'sin matrícula para anular',
                     $records->count() > 1 => 'varias matrículas que deben revisarse individualmente',
                     $records->first()->status === 'active' => 'una matrícula activa que debe revisarse individualmente',
                     default => $this->academicRecordBlocker($student),
                 };
                 if ($blocker !== null) {
-                    throw ValidationException::withMessages([
-                        'student_ids' => "No se anuló ninguna matrícula. El expediente {$student->enrollment_no} tiene {$blocker}.",
-                    ]);
+                    $skipped[] = ['enrollment_no' => $student->enrollment_no, 'reason' => $blocker];
+                    continue;
                 }
 
                 $this->recordEnrollmentAnnulment($request, $records->sole(), $data['reason']);
+                $annulled++;
             }
+
+            return ['annulled' => $annulled, 'skipped' => $skipped];
         });
 
-        return response()->json(['message' => count($data['student_ids']).' matrículas anuladas.']);
+        return response()->json([
+            ...$result,
+            'message' => "Matrículas anuladas: {$result['annulled']}. Expedientes omitidos: ".count($result['skipped']).'.',
+        ]);
     }
 
     private function recordEnrollmentAnnulment(Request $request, StudentEnrollment $record, string $reason): void

@@ -59,6 +59,7 @@ export default function StudentWorkspace() {
     setSelectedIds([]);
     setWithdrawIds([]);
     setAnnulStudents([]);
+    annul.reset();
   }, [workspaceId, yearId]);
 
   const workspaceParams = yearId ? { academic_year_id: yearId } : {};
@@ -194,9 +195,15 @@ export default function StudentWorkspace() {
         <textarea id="bulk-withdraw-reason" autoFocus rows={3} maxLength={200} disabled={withdraw.isPending} className={inputClass} value={withdrawReason} onChange={(event) => setWithdrawReason(event.target.value)} />
       </FormField>
     </ConfirmDialog>
+    {annul.isSuccess && annul.data.skipped.length > 0 && <section role="status" className="my-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
+      <p className="font-bold">{annul.data.message}</p>
+      <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+        {annul.data.skipped.map(({ enrollment_no, reason }) => <li key={enrollment_no}>{enrollment_no} · {reason}</li>)}
+      </ul>
+    </section>}
     <ConfirmDialog open={annulStudents.length > 0} onClose={() => { if (!annul.isPending) setAnnulStudents([]); }}
       title={`Anular matrículas de ${annulStudents.length} estudiantes`}
-      message="Se anulará una matrícula anterior por estudiante sin sección actual. Todos los expedientes seleccionados deben tener una sola matrícula anterior y estar libres de otros registros académicos."
+      message="Se anulará la matrícula de cada expediente sin sección actual que tenga una sola matrícula anterior y esté libre de otros registros académicos. El resultado indicará qué expedientes se omitieron."
       confirmLabel="Anular matrículas" tone="danger" loading={annul.isPending} disableConfirm={!annulReason.trim()}
       onConfirm={() => annul.mutate({ student_ids: annulStudents.map((student) => Number(student.id)), reason: annulReason.trim() })}>
       <ul className="mb-3 max-h-32 overflow-y-auto text-xs text-slate-600">
