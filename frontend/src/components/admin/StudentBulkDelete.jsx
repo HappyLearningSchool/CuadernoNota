@@ -6,7 +6,7 @@ import { getErrorMessage } from '../../utils/apiError';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import FormField, { inputClass } from '../ui/FormField';
 
-export default function StudentBulkDelete({ students, onDeleted }) {
+export default function StudentBulkDelete({ students, onDeleted, menuItem = false, onOpen }) {
   const qc = useQueryClient();
   const [selection, setSelection] = useState([]);
   const [confirmation, setConfirmation] = useState('');
@@ -19,8 +19,10 @@ export default function StudentBulkDelete({ students, onDeleted }) {
     },
   });
   return <>
-    <button type="button" disabled={!students.length} onClick={() => { setSelection([...students]); setConfirmation(''); mutation.reset(); }} className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-40">
-      <span aria-hidden="true" className="material-symbols-outlined text-[17px]">delete</span> Eliminar seleccionados ({students.length})
+    <button type="button" disabled={!students.length} onClick={() => { setSelection([...students]); setConfirmation(''); mutation.reset(); onOpen?.(); }} className={menuItem
+      ? 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold text-red-700 hover:bg-red-50'
+      : 'flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-40'}>
+      <span aria-hidden="true" className="material-symbols-outlined text-[17px]">delete</span> {menuItem ? 'Eliminar expedientes' : `Eliminar seleccionados (${students.length})`}
     </button>
     {selection.length > 0 && createPortal(<ConfirmDialog open onClose={() => { if (!mutation.isPending) setSelection([]); }}
       title={`Eliminar ${selection.length} estudiantes`} tone="danger" confirmLabel={`Eliminar ${selection.length} estudiantes`}

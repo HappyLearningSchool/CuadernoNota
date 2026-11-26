@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getAdminDashboard } from '../api/admin.api';
 import useAuthStore from '../store/authStore';
 import AppLayout from './AppLayout';
+import { AdminGlobalSearch, AdminNotifications } from './admin/AdminHeader';
 
 const menuItems = [
   {
@@ -42,6 +43,7 @@ export default function AdminLayout() {
     queryKey: ['admin-dashboard'],
     queryFn: getAdminDashboard,
     staleTime: 5 * 60_000,
+    refetchInterval: 60_000,
   });
 
   const activeYear = data?.active_academic_year;
@@ -67,7 +69,8 @@ export default function AdminLayout() {
       menuItems={menuItems}
       user={user}
       roleLabel="Administrador"
-      searchPlaceholder="Buscar estudiantes, usuarios o cursos..."
+      headerSearch={<AdminGlobalSearch year={activeYear} />}
+      headerNotifications={<AdminNotifications dashboard={data} />}
       headerContent={headerContent}
       showPeriodSelector
     />

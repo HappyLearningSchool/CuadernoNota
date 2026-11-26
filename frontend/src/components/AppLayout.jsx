@@ -10,6 +10,8 @@ export default function AppLayout({
   user,
   roleLabel,
   searchPlaceholder = 'Buscar...',
+  headerSearch = null,
+  headerNotifications = null,
   headerContent = null,
   showPeriodSelector = false,
   children,
@@ -118,7 +120,7 @@ export default function AppLayout({
       </aside>
 
       {/* Header */}
-      <header className="fixed top-0 right-0 left-0 lg:left-[260px] h-16 z-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 gap-3 lg:gap-4">
+      <header className="fixed top-0 right-0 left-0 lg:left-[260px] h-16 z-[25] bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 gap-3 lg:gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <button
             type="button"
@@ -129,14 +131,14 @@ export default function AppLayout({
             <span className="material-symbols-outlined text-[22px]">menu</span>
           </button>
 
-          <div className="relative w-full max-w-md">
+          {headerSearch ?? <div className="relative w-full max-w-md">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
             <input
               type="text"
               placeholder={searchPlaceholder}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
             />
-          </div>
+          </div>}
 
           {showPeriodSelector && headerContent && (
             <div className="hidden md:block">{headerContent}</div>
@@ -144,9 +146,9 @@ export default function AppLayout({
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all">
+          {headerNotifications ?? <button className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all">
             <span className="material-symbols-outlined text-[22px]">notifications</span>
-          </button>
+          </button>}
           <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden sm:block"></div>
           <div className="hidden sm:flex items-center gap-2">
             <span className="material-symbols-outlined text-slate-400">account_circle</span>

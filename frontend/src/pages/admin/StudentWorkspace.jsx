@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { bulkAnnulEnrollments, bulkWithdrawStudents, getAdminStudents, getStudentWorkspaces } from '../../api/admin.api';
+import { bulkAnnulEnrollments, bulkWithdrawStudents, getAdminStudents, getSections, getStudentWorkspaces } from '../../api/admin.api';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getErrorMessage } from '../../utils/apiError';
 import useToast from '../../hooks/useToast';
@@ -16,6 +16,8 @@ import StudentBulkReplaceDrawer from '../../components/admin/StudentBulkReplaceD
 import FormField, { inputClass, selectClass } from '../../components/ui/FormField';
 import Toast from '../../components/ui/Toast';
 
+const batchMenuItem = 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50';
+
 export default function StudentWorkspace() {
   const { workspaceId } = useParams();
   const [searchParams] = useSearchParams();
@@ -24,6 +26,7 @@ export default function StudentWorkspace() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { toast, showToast } = useToast();
+  const batchMenu = useRef(null);
   const [search, setSearch] = useState('');
   const [active, setActive] = useState('');
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -72,6 +75,12 @@ export default function StudentWorkspace() {
   const workspace = pending
     ? null
     : workspaceData?.workspaces?.find((item) => Number(item.id) === Number(workspaceId));
+  const { data: catalogSections } = useQuery({
+    queryKey: ['admin-sections', 'global-search', yearId ? Number(yearId) : undefined],
+    queryFn: () => getSections(workspaceParams),
+    enabled: !pending && Boolean(workspaceData) && !workspace,
+  });
+  const catalogSection = catalogSections?.find((section) => Number(section.id) === Number(workspaceId));
   const params = {
     per_page: 1000,
     ...(pending ? { pending: 1 } : { section_id: workspaceId, ...(yearId ? { academic_year_id: yearId } : {}) }),
@@ -88,12 +97,18 @@ export default function StudentWorkspace() {
   const allVisibleSelected = students.length > 0 && visibleSelectedCount === students.length;
   const title = pending
     ? 'Pendientes de asignación'
-    : workspace ? `${workspace.grade_name} · Sección ${workspace.section_name}` : 'Workspace del curso';
+    : workspace ? `${workspace.grade_name} · Sección ${workspace.section_name}`
+      : catalogSection ? `${catalogSection.grade?.name} · Sección ${catalogSection.name}` : 'Workspace del curso';
   const description = pending
     ? 'Expedientes sin una sección actual. Revisa, corrige y prepara a los estudiantes para su asignación.'
-    : workspace ? `${workspace.shift} · ${workspace.academic_year_name} · Administra a todos los estudiantes de este curso.` : 'Cargando información del curso…';
+    : workspace ? `${workspace.shift} · ${workspace.academic_year_name} · Administra a todos los estudiantes de este curso.`
+      : catalogSection ? `${catalogSection.shift} · ${catalogSection.academic_year?.name}` : 'Cargando información del curso…';
   const totals = pending ? workspaceData?.pending : workspace;
   const workspaceLabel = pending ? 'Pendientes de asignación' : title;
+
+  const closeBatchMenu = () => {
+    if (batchMenu.current) batchMenu.current.open = false;
+  };
 
   const updateSelection = (rows, checked) => {
     const ids = new Set(rows.map((student) => Number(student.id)));
@@ -129,29 +144,45 @@ export default function StudentWorkspace() {
       </select>
     </FilterBar>
 
-    {(students.length > 0 || selectedIds.length > 0) && <div className="sticky top-0 z-20 mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-sm font-extrabold text-slate-900">Acciones por lote</p>
-        <p className="mt-1 text-xs text-slate-500">{selectedIds.length} seleccionados en total · {visibleSelectedCount} visibles.</p>
-        {!pending && selectedIds.length > 0 && <p className="mt-1 text-xs font-bold text-indigo-600">Usa «Quitar seleccionados del curso» para retirar todo el grupo marcado.</p>}
+    {(students.length > 0 || selectedIds.length > 0) && <div className="sticky top-16 z-20 mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-4">
+      <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+        <span className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-xs font-bold tabular-nums text-indigo-700">{selectedIds.length} seleccionados</span>
+        {visibleSelectedCount < selectedIds.length && <span className="text-xs text-slate-500">{visibleSelectedCount} visibles</span>}
       </div>
-      <div className="flex flex-wrap gap-2">
-        <StudentBulkDelete students={selectedStudents} onDeleted={(result) => { setSelectedStudents([]); showToast(result.message); }} />
-        {pending && <button type="button" disabled={!selectedStudents.length} onClick={() => {
-          annul.reset();
-          setAnnulReason('');
-          setAnnulStudents(selectedStudents);
-        }} className="rounded-lg border border-red-200 px-3 py-2.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-40">
-          Anular matrículas
-        </button>}
-        {!pending && <button type="button" disabled={!selectedIds.length} onClick={() => { withdraw.reset(); setWithdrawReason(''); setWithdrawStudents(selectedStudents); }} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
-          <span aria-hidden="true" className="material-symbols-outlined text-[17px]">group_remove</span> Quitar seleccionados del curso ({selectedIds.length})
-        </button>}
-        <button type="button" disabled={!students.length} onClick={() => updateSelection(students, !allVisibleSelected)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40">{allVisibleSelected ? 'Desmarcar visibles' : 'Seleccionar visibles'}</button>
-        {selectedIds.length > 0 && <button type="button" onClick={() => setSelectedStudents([])} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Limpiar selección</button>}
-        <button type="button" disabled={!selectedIds.length} onClick={() => setBulkOpen(true)} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
-          <span aria-hidden="true" className="material-symbols-outlined text-[17px]">find_replace</span> Buscar y reemplazar matrículas
-        </button>
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <button type="button" disabled={!students.length} onClick={() => updateSelection(students, !allVisibleSelected)} className="rounded-md px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">{allVisibleSelected ? 'Desmarcar visibles' : 'Seleccionar visibles'}</button>
+        {selectedIds.length > visibleSelectedCount && <button type="button" onClick={() => setSelectedStudents([])} className="rounded-md px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Limpiar selección</button>}
+        {selectedIds.length > 0 && <details ref={batchMenu} className="group relative" onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) closeBatchMenu();
+        }} onKeyDown={(event) => {
+          if (event.key === 'Escape' && event.currentTarget.open) {
+            closeBatchMenu();
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }}>
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700 [&::-webkit-details-marker]:hidden">
+            Acciones por lote <span aria-hidden="true" className="material-symbols-outlined text-[16px] group-open:rotate-180">expand_more</span>
+          </summary>
+          <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+            {pending ? <button type="button" className={batchMenuItem} onClick={() => {
+              closeBatchMenu();
+              annul.reset();
+              setAnnulReason('');
+              setAnnulStudents(selectedStudents);
+            }}><span aria-hidden="true" className="material-symbols-outlined text-[17px]">event_busy</span> Anular matrículas</button>
+              : <button type="button" className={batchMenuItem} onClick={() => {
+                closeBatchMenu();
+                withdraw.reset();
+                setWithdrawReason('');
+                setWithdrawStudents(selectedStudents);
+              }}><span aria-hidden="true" className="material-symbols-outlined text-[17px]">group_remove</span> Quitar del curso</button>}
+            <button type="button" className={batchMenuItem} onClick={() => { closeBatchMenu(); setBulkOpen(true); }}>
+              <span aria-hidden="true" className="material-symbols-outlined text-[17px]">find_replace</span> Buscar y reemplazar matrículas
+            </button>
+            <div className="mx-2 my-1 border-t border-slate-100" />
+            <StudentBulkDelete menuItem onOpen={closeBatchMenu} students={selectedStudents} onDeleted={(result) => { setSelectedStudents([]); showToast(result.message); }} />
+          </div>
+        </details>}
       </div>
     </div>}
 

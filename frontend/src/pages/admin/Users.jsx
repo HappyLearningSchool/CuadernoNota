@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createAdminUser, deactivateAdminUser, getAdminUsers, updateAdminUser } from '../../api/admin.api';
 import useAuthStore from '../../store/authStore';
@@ -24,10 +25,19 @@ export default function AdminUsers({ coordinatorsOnly = false }) {
   const { user: currentUser } = useAuthStore();
   const { toast, showToast } = useToast();
 
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const linkedSearch = searchParams.get('search') ?? '';
+  const [search, setSearch] = useState(linkedSearch);
   const [role, setRole] = useState('');
   const [active, setActive] = useState('');
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setSearch(linkedSearch);
+    setRole('');
+    setActive('');
+    setPage(1);
+  }, [linkedSearch]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);

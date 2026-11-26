@@ -30,8 +30,9 @@ class StudentController extends Controller
             ->when($request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
             ->when($request->grade_id, fn ($q, $id) => $q->whereHas('section', fn ($section) => $section->where('grade_id', $id)))
             ->when($request->search, fn ($q, $search) => $q->where(fn ($nested) => $nested
-                ->where('name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%")
-                ->orWhere('enrollment_no', 'like', "%{$search}%")))
+                ->whereLike('name', "%{$search}%")->orWhereLike('last_name', "%{$search}%")
+                ->orWhereLike(DB::raw("(name || ' ' || last_name)"), "%{$search}%")
+                ->orWhereLike('enrollment_no', "%{$search}%")))
             ->orderBy('last_name')->orderBy('name')->paginate($perPage));
     }
 

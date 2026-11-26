@@ -14,6 +14,19 @@ class AdminStudentCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_student_search_matches_full_name_and_enrollment_number(): void
+    {
+        $this->admin();
+        $student = $this->student(['name' => 'Ana María', 'last_name' => 'Pérez']);
+
+        foreach (['ana maría Pérez', $student->enrollment_no] as $search) {
+            $this->getJson('/api/admin/students?'.http_build_query(['search' => $search]))
+                ->assertOk()
+                ->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.id', $student->id);
+        }
+    }
+
     public function test_student_profile_shows_activity_scores_without_period_grades(): void
     {
         $this->admin();

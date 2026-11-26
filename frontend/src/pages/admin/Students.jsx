@@ -32,7 +32,8 @@ export default function AdminStudents() {
   const [search, setSearch] = useState('');
   const [active, setActive] = useState('');
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const selectedIds = new Set(selectedStudents.map((student) => student.id));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
@@ -45,8 +46,14 @@ export default function AdminStudents() {
 
   const { data, isLoading } = useQuery({ queryKey: ['admin-students', params], queryFn: () => getAdminStudents(params), enabled: view === 'list' });
   const students = data?.data || [];
-  useEffect(() => { setSelectedIds([]); }, [page, search, active, view]);
-  useEffect(() => { setSelectedIds(current => current.filter(id => students.some(student => student.id === id))); }, [data]);
+  const visibleSelected = students.filter((student) => selectedIds.has(student.id)).length;
+  const updateSelection = (rows, checked) => {
+    const ids = new Set(rows.map((student) => student.id));
+    setSelectedStudents((current) => {
+      const remaining = current.filter((student) => !ids.has(student.id));
+      return checked ? [...remaining, ...rows] : remaining;
+    });
+  };
   const { data: years = [] } = useQuery({ queryKey: ['admin-years'], queryFn: getAcademicYears });
   useEffect(() => {
     if (!yearId && years.length) setYearId(String(years.find((year) => year.active)?.id || years[0].id));
@@ -126,10 +133,11 @@ export default function AdminStudents() {
         <Link to="/admin/student-placements" className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-bold hover:bg-emerald-100">Asignar estudiantes <span aria-hidden="true" className="material-symbols-outlined text-[18px]">arrow_forward</span></Link>
       </div>}
 
-      {view === 'list' && students.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <span className="text-xs font-bold text-slate-600">{selectedIds.length} seleccionados de esta página</span>
-        <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600" onClick={() => setSelectedIds(selectedIds.length === students.length ? [] : students.map(student => student.id))}>{selectedIds.length === students.length ? 'Limpiar selección' : 'Seleccionar visibles'}</button>
-        <StudentBulkDelete students={students.filter(student => selectedIds.includes(student.id))} onDeleted={result => { setSelectedIds([]); showToast(result.message); }} />
+      {view === 'list' && (students.length > 0 || selectedIds.size > 0) && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+        <span className="text-xs font-bold text-slate-600">{selectedIds.size} seleccionados en total · {visibleSelected} visibles</span>
+        <button type="button" disabled={!students.length} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-40" onClick={() => updateSelection(students, visibleSelected !== students.length)}>{students.length > 0 && visibleSelected === students.length ? 'Desmarcar visibles' : 'Seleccionar visibles'}</button>
+        {selectedIds.size > 0 && <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600" onClick={() => setSelectedStudents([])}>Limpiar selección</button>}
+        <StudentBulkDelete students={selectedStudents} onDeleted={result => { setSelectedStudents([]); showToast(result.message); }} />
       </div>}
       {view === 'workspaces' ? <StudentWorkspaceCards data={workspaceData} loading={workspacesLoading} onOpen={(workspaceId) => navigate(`/admin/students/workspaces/${workspaceId}${workspaceId === 'pending' ? '' : `?year=${yearId}`}`)} /> : <DataTable
         loading={isLoading}
@@ -138,13 +146,13 @@ export default function AdminStudents() {
         emptyIcon="school"
         emptyTitle="No hay estudiantes que coincidan con los filtros."
         columns={[
-          { key: 'select', label: '', render: (student) => <input type="checkbox" aria-label={`Seleccionar a ${student.name} ${student.last_name}`} checked={selectedIds.includes(student.id)} onClick={event => event.stopPropagation()} onChange={event => setSelectedIds(current => event.target.checked ? [...current, student.id] : current.filter(id => id !== student.id))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" /> },
+          { key: 'select', label: '', render: (student) => <input type="checkbox" aria-label={`Seleccionar a ${student.name} ${student.last_name}`} checked={selectedIds.has(student.id)} onClick={event => event.stopPropagation()} onChange={event => updateSelection([student], event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600" /> },
           { key: 'enrollment_no', label: 'Matrícula', render: (s) => <span className="font-mono text-xs font-bold text-slate-500">{s.enrollment_no}</span> },
           { key: 'name', label: 'Estudiante', render: (s) => <span className="font-bold text-slate-900">{s.name} {s.last_name}</span> },
           { key: 'section', label: 'Grado / Sección', render: (s) => s.section ? `${s.section.grade?.name} ${s.section.name}` : <span className="font-semibold text-amber-600">Pendiente de asignación</span> },
           { key: 'year', label: 'Año escolar', render: (s) => s.section?.academic_year?.name || '—' },
           { key: 'active', label: 'Estado', align: 'center', render: (s) => <StatusBadge tone={!s.active ? 'neutral' : s.section ? 'success' : 'warning'} label={!s.active ? 'Inactivo' : s.section ? 'Inscrito' : 'Pendiente'} /> },
-          { key: 'actions', label: 'Acciones', align: 'right', render: (s) => <StudentActions student={s} onSuccess={showToast} /> },
+          { key: 'actions', label: 'Acciones', align: 'right', render: (s) => <StudentActions student={s} onDeleted={() => updateSelection([s], false)} onSuccess={showToast} /> },
         ]}
       />}
 

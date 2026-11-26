@@ -21,8 +21,8 @@ class UserController extends Controller
             ->when($request->role, fn ($query, $role) => $query->where('role', $role))
             ->when($request->filled('active'), fn ($query) => $query->where('active', $request->boolean('active')))
             ->when($request->search, fn ($query, $search) => $query->where(fn ($nested) => $nested
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%")))
+                ->whereLike('name', "%{$search}%")
+                ->orWhereLike('email', "%{$search}%")))
             ->orderBy('name')
             ->paginate($request->integer('per_page', 20));
 
