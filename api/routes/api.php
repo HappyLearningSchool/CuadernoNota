@@ -83,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/students/{student}/reactivate', [AdminStudentController::class, 'reactivate'])->name('students.reactivate');
             Route::post('/students/bulk-withdraw', [AdminStudentController::class, 'bulkWithdraw'])->name('students.bulk-withdraw');
             Route::post('/students/bulk-delete', [AdminStudentController::class, 'bulkDestroy'])->name('students.bulk-delete');
+            Route::post('/students/bulk-annul-enrollments', [AdminStudentController::class, 'bulkAnnulEnrollments'])->name('students.bulk-annul-enrollments');
             Route::post('/students/{student}/withdraw', [AdminStudentController::class, 'withdraw'])->name('students.withdraw');
             Route::post('/students/{student}/enrollments/{enrollment}/annul', [AdminStudentController::class, 'annulEnrollment'])->name('students.enrollments.annul');
 

@@ -27,6 +27,7 @@ export const reactivateStudent = id => api.post(`/admin/students/${id}/reactivat
 export const withdrawStudent = (id, data) => api.post(`/admin/students/${id}/withdraw`, data).then(r => r.data);
 export const bulkWithdrawStudents = (data) => api.post('/admin/students/bulk-withdraw', data).then(r => r.data);
 export const bulkDeleteStudents = (data) => api.post('/admin/students/bulk-delete', data).then(r => r.data);
+export const bulkAnnulEnrollments = (data) => api.post('/admin/students/bulk-annul-enrollments', data).then(r => r.data);
 export const previewStudentBulkReplace = data => api.post('/admin/students/bulk-replace/preview', data).then(r => r.data);
 export const replaceStudentEnrollments = data => api.post('/admin/students/bulk-replace', data).then(r => r.data);
 const studentCsvForm = file => { const data = new FormData(); data.append('file', file); return data; };

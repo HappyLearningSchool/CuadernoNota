@@ -14,6 +14,29 @@ class AdminStudentCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_bulk_annulment_is_atomic_for_students_without_a_current_section(): void
+    {
+        $this->admin();
+        [, $section] = $this->catalog();
+        $first = $this->student();
+        $second = $this->student(['enrollment_no' => 'DUPLICATE', 'active' => false]);
+        $attributes = ['section_id' => $section, 'enrolled_at' => '2026-01-01', 'status' => 'withdrawn'];
+        $firstEnrollment = $first->enrollments()->create($attributes);
+        $payload = ['student_ids' => [$first->id, $second->id], 'reason' => 'Expedientes duplicados'];
+        $url = '/api/admin/students/bulk-annul-enrollments';
+
+        $this->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('student_ids');
+        $this->assertDatabaseHas('student_enrollments', ['id' => $firstEnrollment->id]);
+        $this->assertDatabaseCount('audit_logs', 0);
+
+        $secondEnrollment = $second->enrollments()->create($attributes);
+        $this->postJson($url, $payload)->assertOk();
+        $this->assertDatabaseMissing('student_enrollments', ['id' => $firstEnrollment->id]);
+        $this->assertDatabaseMissing('student_enrollments', ['id' => $secondEnrollment->id]);
+        $this->assertSame(2, DB::table('audit_logs')->where('action', 'student_enrollment_annul')->count());
+        $this->assertDatabaseHas('students', ['id' => $second->id]);
+    }
+
     public function test_admin_can_annul_a_duplicate_students_enrollment_then_delete_the_student(): void
     {
         $this->admin();

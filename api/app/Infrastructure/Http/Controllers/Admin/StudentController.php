@@ -250,16 +250,7 @@ class StudentController extends Controller
                 ]);
             }
 
-            AuditLog::create([
-                'user_id' => $request->user()->id,
-                'action' => 'student_enrollment_annul',
-                'affected_table' => 'student_enrollments',
-                'record_id' => $record->id,
-                'detail' => ['reason' => $data['reason'], 'enrollment' => $record->getAttributes()],
-                'ip' => $request->ip(),
-            ]);
-
-            $record->delete();
+            $this->recordEnrollmentAnnulment($request, $record, $data['reason']);
             if ($student->section_id !== null && (int) $student->section_id === (int) $record->section_id
                 && ! $student->enrollments()->where('status', 'active')->exists()) {
                 $student->update(['section_id' => null, 'academic_year_id' => null]);
@@ -267,6 +258,56 @@ class StudentController extends Controller
         });
 
         return response()->json(['message' => 'Matrícula anulada.']);
+    }
+
+    public function bulkAnnulEnrollments(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'student_ids' => ['required', 'array', 'min:1', 'max:1000'],
+            'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
+            'reason' => ['required', 'string', 'max:200'],
+        ]);
+
+        DB::transaction(function () use ($request, $data) {
+            $students = Student::whereIn('id', $data['student_ids'])->orderBy('id')->lockForUpdate()->get();
+            if ($students->count() !== count($data['student_ids'])) {
+                throw ValidationException::withMessages(['student_ids' => 'El listado cambió. Actualízalo antes de continuar.']);
+            }
+
+            foreach ($students as $student) {
+                $records = $student->enrollments()->lockForUpdate()->limit(2)->get();
+                $blocker = match (true) {
+                    $student->section_id !== null => 'una sección actual',
+                    $records->isEmpty() => 'ninguna matrícula para anular',
+                    $records->count() > 1 => 'varias matrículas que deben revisarse individualmente',
+                    $records->first()->status === 'active' => 'una matrícula activa que debe revisarse individualmente',
+                    default => $this->academicRecordBlocker($student),
+                };
+                if ($blocker !== null) {
+                    throw ValidationException::withMessages([
+                        'student_ids' => "No se anuló ninguna matrícula. El expediente {$student->enrollment_no} tiene {$blocker}.",
+                    ]);
+                }
+
+                $this->recordEnrollmentAnnulment($request, $records->sole(), $data['reason']);
+            }
+        });
+
+        return response()->json(['message' => count($data['student_ids']).' matrículas anuladas.']);
+    }
+
+    private function recordEnrollmentAnnulment(Request $request, StudentEnrollment $record, string $reason): void
+    {
+        AuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'student_enrollment_annul',
+            'affected_table' => 'student_enrollments',
+            'record_id' => $record->id,
+            'detail' => ['reason' => $reason, 'enrollment' => $record->getAttributes()],
+            'ip' => $request->ip(),
+        ]);
+
+        $record->delete();
     }
 
     public function bulkDestroy(Request $request): JsonResponse

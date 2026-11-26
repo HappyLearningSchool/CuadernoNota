@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { bulkWithdrawStudents, getAdminStudents, getStudentWorkspaces } from '../../api/admin.api';
+import { bulkAnnulEnrollments, bulkWithdrawStudents, getAdminStudents, getStudentWorkspaces } from '../../api/admin.api';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getErrorMessage } from '../../utils/apiError';
 import useToast from '../../hooks/useToast';
@@ -30,6 +30,18 @@ export default function StudentWorkspace() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [withdrawIds, setWithdrawIds] = useState([]);
   const [withdrawReason, setWithdrawReason] = useState('');
+  const [annulStudents, setAnnulStudents] = useState([]);
+  const [annulReason, setAnnulReason] = useState('');
+  const annul = useMutation({
+    mutationFn: bulkAnnulEnrollments,
+    onSuccess: (result) => {
+      setAnnulStudents([]);
+      setSelectedIds([]);
+      qc.invalidateQueries({ queryKey: ['admin-student'] });
+      qc.invalidateQueries({ queryKey: ['admin-student-placements'] });
+      showToast(result.message);
+    },
+  });
   const withdraw = useMutation({
     mutationFn: bulkWithdrawStudents,
     onSuccess: (result) => {
@@ -46,6 +58,7 @@ export default function StudentWorkspace() {
   useEffect(() => {
     setSelectedIds([]);
     setWithdrawIds([]);
+    setAnnulStudents([]);
   }, [workspaceId, yearId]);
 
   const workspaceParams = yearId ? { academic_year_id: yearId } : {};
@@ -125,6 +138,13 @@ export default function StudentWorkspace() {
       </div>
       <div className="flex flex-wrap gap-2">
         <StudentBulkDelete students={selectedStudents} onDeleted={(result) => { setSelectedIds([]); showToast(result.message); }} />
+        {pending && <button type="button" disabled={!selectedStudents.length} onClick={() => {
+          annul.reset();
+          setAnnulReason('');
+          setAnnulStudents(selectedStudents);
+        }} className="rounded-lg border border-red-200 px-3 py-2.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-40">
+          Anular matrículas
+        </button>}
         {!pending && <button type="button" disabled={!selectedIds.length} onClick={() => { withdraw.reset(); setWithdrawReason(''); setWithdrawIds([...selectedIds]); }} className="flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40">
           <span aria-hidden="true" className="material-symbols-outlined text-[17px]">group_remove</span> Quitar seleccionados del curso ({selectedIds.length})
         </button>}
@@ -172,6 +192,19 @@ export default function StudentWorkspace() {
       {withdraw.isError && <p role="alert" className="mb-3 text-sm text-red-600">{getErrorMessage(withdraw.error)}</p>}
       <FormField htmlFor="bulk-withdraw-reason" label="Motivo del retiro" required>
         <textarea id="bulk-withdraw-reason" autoFocus rows={3} maxLength={200} disabled={withdraw.isPending} className={inputClass} value={withdrawReason} onChange={(event) => setWithdrawReason(event.target.value)} />
+      </FormField>
+    </ConfirmDialog>
+    <ConfirmDialog open={annulStudents.length > 0} onClose={() => { if (!annul.isPending) setAnnulStudents([]); }}
+      title={`Anular matrículas de ${annulStudents.length} estudiantes`}
+      message="Se anulará una matrícula anterior por estudiante sin sección actual. Todos los expedientes seleccionados deben tener una sola matrícula anterior y estar libres de otros registros académicos."
+      confirmLabel="Anular matrículas" tone="danger" loading={annul.isPending} disableConfirm={!annulReason.trim()}
+      onConfirm={() => annul.mutate({ student_ids: annulStudents.map((student) => Number(student.id)), reason: annulReason.trim() })}>
+      <ul className="mb-3 max-h-32 overflow-y-auto text-xs text-slate-600">
+        {annulStudents.map((student) => <li key={student.id}>{student.enrollment_no} · {student.name} {student.last_name}</li>)}
+      </ul>
+      {annul.isError && <p role="alert" className="mb-3 text-sm text-red-600">{getErrorMessage(annul.error)}</p>}
+      <FormField htmlFor="bulk-annul-reason" label="Motivo de la anulación" required>
+        <textarea id="bulk-annul-reason" autoFocus rows={3} maxLength={200} disabled={annul.isPending} className={inputClass} value={annulReason} onChange={(event) => setAnnulReason(event.target.value)} />
       </FormField>
     </ConfirmDialog>
     <Toast toast={toast} />
